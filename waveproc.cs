@@ -5,6 +5,8 @@ using System.Text;
 using NAudio.Wave;
 using FFTWSharp;
 
+
+
 // Audio Wave recording and Analysis
 // Uses NAudio for Audio Device Access - see http://naudio.codeplex.com/
 
@@ -13,7 +15,8 @@ namespace audio_test
 
     class WaveProcess
     {
-        private WaveIn wi;
+        private AudioSrc audio;
+        // private WaveIn wi;
         private fft fftx;
 
         public double amp_cf; // Amplitude correction factor - fed through from the FFT
@@ -28,6 +31,7 @@ namespace audio_test
         public process_buffer[] buffer;
         public int buf_wr;
         public int buf_rd;
+        public int buf_last;
         public volatile int overflow;
         
         public int overloaded = 0;
@@ -44,19 +48,23 @@ namespace audio_test
 
         public WaveProcess(log_delegate dgt)
         {
-            wi = null;
+            // wi = null;
+            audio = new AudioSrc();
             log = dgt;
-            int wid = WaveIn.DeviceCount;
+            devices = audio.getDeviceList();
+
+            /*int wid = WaveIn.DeviceCount;
             devices = new List<string>();
             for (int i = 0; i < wid; i++)
             {
                 WaveInCapabilities devinf = WaveIn.GetCapabilities(i);
                 devices.Add(String.Format("{0}: {1} channels", devinf.ProductName, devinf.Channels));
-            }
+            }*/
 
             overflow = 0;
             buffer = new process_buffer[buffers];
             buf_wr = buf_rd = 0;
+            buf_last = -1;
             for (int i=0;i<buffers;i++) 
                 buffer[i]=new process_buffer(2400);
 
@@ -77,26 +85,38 @@ namespace audio_test
         private void record_thread()
         {
             log("Record Thread Started");
+            audio.newDataAvailableEventHandler += Audio_newDataAvailableEventHandler;
+            audio.sampleRate = 48000;
+            audio.open(usedev);
+            /*
             // set up the recorder
             wi = new WaveIn(WaveCallbackInfo.FunctionCallback());
             wi.WaveFormat = new WaveFormat(48000, 16, 2);
             wi.DeviceNumber = usedev;
             wi.DataAvailable += RecorderOnDataAvailable;
             wi.BufferMilliseconds = 50; // 50 ms = 2400 Samples at 48 kHz fs
+            */
 
             fftx = new fft(2400, fft_win);
             fftfreq = fftx.freq;
             amp_cf = fftx.amp_cf;
             pwr_cf = fftx.pwr_cf;
 
-            wi.StartRecording();
+            // wi.StartRecording();
             log("Recording started");
             while (!killthread)
             {
                 System.Threading.Thread.Sleep(100);
             }
-            wi.StopRecording();
+            // wi.StopRecording();
+            audio.close();
             log("Recording stopped");
+        }
+
+        private void Audio_newDataAvailableEventHandler(object sender, EventArgs e)
+        {
+            DataAvailable(((AudioSrc.NewDataAvailableArgs)e).L,
+                ((AudioSrc.NewDataAvailableArgs)e).R);
         }
 
         public void set_window(fft.window_type wt)
@@ -110,6 +130,39 @@ namespace audio_test
             }
         }
 
+        public void DataAvailable(double[] L, double [] R)
+        {
+            if ((buf_wr+1) % buffers == buf_rd)
+            {
+                overflow+=L.Length;
+                return;
+            }
+            for (int i = 0; i < L.Length; i++)
+            {
+                if (buffer[buf_wr].add(L[i], R[i])) {
+                    // Buffer Full
+                    buffer[buf_wr].resetFill();
+                    if (buf_last >= 0)
+                    {
+                        fftx.run(buffer[buf_last].wavel, buffer[buf_wr].wavel, buffer[buf_wr].fftl1, 0);
+                        fftx.run(buffer[buf_last].waver, buffer[buf_wr].waver, buffer[buf_wr].fftr1, 1);
+                    }
+                    fftx.run(null, buffer[buf_wr].fft1, 2);
+                    fftx.run(buffer[buf_wr].wavel, buffer[buf_wr].fftl2, 0);
+                    fftx.run(buffer[buf_wr].waver, buffer[buf_wr].fftr2, 1);
+                    fftx.run(null, buffer[buf_wr].fft2, 2);
+                    // Inc or overflow
+                    buf_last = buf_wr;
+                    if ((buf_wr + 1) % buffers == buf_rd)
+                    {
+                        overflow += L.Length - i;
+                        return;
+                    }
+                    buf_wr = (buf_wr + 1) % buffers;
+                }
+            }
+        }
+        /*
         private void RecorderOnDataAvailable(object sender, WaveInEventArgs waveInEventArgs)
         {
             int bnext = (buf_wr + 1) % buffers;
@@ -159,7 +212,7 @@ namespace audio_test
 
             buf_wr = bnext;
         }
-
+        */
         public void stop()
         {
             // stop recording

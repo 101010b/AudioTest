@@ -71,6 +71,8 @@ namespace audio_test
         double pwr_ref_level;
         double fft_spek_ref_level;
         int[] maxspek = new int[1200];
+        double addCircOfsF = 0;
+        double addCircOfsPhi = 0;
 
         // Size and Dimensions
         float fontsize = 8F;
@@ -179,6 +181,8 @@ namespace audio_test
             osc_grp.Add(new group_element(osc_stereo_display, top));
             osc_grp.Add(new group_element(osc_gain_label, top));
             osc_grp.Add(new group_element(osc_gain, top));
+            osc_grp.Add(new group_element(osc_circ_ofs_label, top));
+            osc_grp.Add(new group_element(osc_circ_ofs, top));
             osc_grp.Add(new group_element(osc_horz_axis, top));
             osc_grp.Add(new group_element(osc_color_label, top));
             osc_grp.Add(new group_element(osc_color, top));
@@ -329,7 +333,16 @@ namespace audio_test
             test_tone_modform.Items.Add("_-_-_-_");
             test_tone_modform.SelectedIndex = 0;
 
-
+            osc_circ_ofs.Items.Add("off");
+            osc_circ_ofs.Items.Add("6.875 Hz");
+            osc_circ_ofs.Items.Add("13.75 Hz");
+            osc_circ_ofs.Items.Add("27.5 Hz");
+            osc_circ_ofs.Items.Add("55 Hz");
+            osc_circ_ofs.Items.Add("110 Hz");
+            osc_circ_ofs.Items.Add("220 Hz");
+            osc_circ_ofs.Items.Add("440 Hz");
+            osc_circ_ofs.Items.Add("880 Hz");
+            osc_circ_ofs.SelectedIndex = 0;
 
             // Update Axis Bitmaps
             update_fft_horz_axis();
@@ -996,13 +1009,30 @@ namespace audio_test
 
                 for (int i = 0; i < 2400; i++)
                 {
-                    int x = osc_sel_gain * (int)waveproc.buffer[waveproc.buf_rd].wavel[i];
-                    int y = osc_sel_gain * (int)waveproc.buffer[waveproc.buf_rd].waver[i];
+                    int x, y;
+                    x = osc_sel_gain * (int)waveproc.buffer[waveproc.buf_rd].wavel[i];
+                    y = osc_sel_gain * (int)waveproc.buffer[waveproc.buf_rd].waver[i];
+                    if (addCircOfsF > 0)
+                    {
+                        addCircOfsPhi += addCircOfsF / 48000;
+                        if (addCircOfsPhi > 1)
+                            addCircOfsPhi = addCircOfsPhi - Math.Floor(addCircOfsPhi);
+                        int dx = (int)Math.Floor(16384.0 * Math.Sin(addCircOfsPhi * 2 * Math.PI));
+                        int dy = (int)Math.Floor(16384.0 * Math.Cos(addCircOfsPhi * 2 * Math.PI));
+
+                        int ax = dx + ((dx * (x+y)) >> 15);
+                        int ay = dy + ((dy * (x+y)) >> 15);
+
+                        x = ax;
+                        y = ay;
+                        //x += dx;
+                        //y += dy;
+                    }
                     x = (x * sterosc.bmapdatawidth >> 16) + sterosc.bmapdatawidth / 2;
                     y = sterosc.bmapdataheight / 2 - (y * sterosc.bmapdataheight >> 16);
                     if ((x >= 0) && (x < sterosc.bmapdatawidth) && (y >= 0) && (y < sterosc.bmapdataheight))
                     {
-                        int ofs = y*sterosc.bmapdatawidth+x;
+                        int ofs = y * sterosc.bmapdatawidth + x;
                         if (stereomap[ofs] < 100) stereomap[ofs] = 600; else stereomap[ofs] += 5;
                     }
                 }
@@ -1479,6 +1509,25 @@ namespace audio_test
         private void test_tone_sweep_time_ValueChanged(object sender, EventArgs e)
         {
             test_tone_out.setup.sweeptime = Decimal.ToDouble(test_tone_sweep_time.Value);
+        }
+
+        private void osc_circ_ofs_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            switch (osc_circ_ofs.SelectedIndex)
+            {
+                case 0:
+                    addCircOfsF = 0;
+                    addCircOfsPhi = 0;
+                    break;
+                case 1: addCircOfsF = 6.875; break;
+                case 2: addCircOfsF = 13.75; break;
+                case 3: addCircOfsF = 27.5; break;
+                case 4: addCircOfsF = 55; break;
+                case 5: addCircOfsF = 110; break;
+                case 6: addCircOfsF = 220; break;
+                case 7: addCircOfsF = 440; break;
+                case 8: addCircOfsF = 880; break;
+            }
         }
 
         private void test_tone_logsweep_CheckedChanged(object sender, EventArgs e)

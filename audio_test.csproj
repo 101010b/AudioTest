@@ -38,7 +38,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="fftwlib">
-      <HintPath>FFTWSharp\bin\Release\fftwlib.dll</HintPath>
+      <HintPath>FFTWSharp\bin\Debug\fftwlib.dll</HintPath>
     </Reference>
     <Reference Include="NAudio">
       <HintPath>NAudio-1-7-2\NAudio.dll</HintPath>
@@ -55,6 +55,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="audioSrc.cs" />
     <Compile Include="bitmap_element.cs" />
     <Compile Include="color_table.cs" />
     <Compile Include="fft.cs" />
